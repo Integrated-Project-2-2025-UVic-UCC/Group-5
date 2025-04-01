@@ -1,36 +1,39 @@
-// define pins
-#include <PWM.h>
-
 void setup() {
   Serial.begin(115200);
+  pinMode(3, OUTPUT); // VELOCITAT
+  pinMode(10, OUTPUT); // DIRECCIÓ
+  pinMode(11, OUTPUT);  //DIRECCIÓ
 
-  InitTimersSafe(); 
+  TCCR3A = ( TCCR3A & B11111000 | B00000001 );    // TIMER MAIN MOTOR
+  TCCR3B = ( TCCR3B & B11111000 | B00000010 );
 
-  SetPinFrequencySafe(9,100); // MODIFICAR
+  EICRB |= B00000011;   // RISING EDGE INTERRUPT
+  EIMSK |= B00010000;   // ENABLE INT4 PIN 2 INTERRUPT
 
-  pinMode(9,OUTPUT); // VELOCITAT
-  pinMode(10,OUTPUT); // DIRECCIÓ
-
-  //TCCR1A = (TCCR1A | B00000001 & B11111101);  // TIMER 1 MODE 4 CTC OCR1A
-  //TCCR1B = (TCCR1B | B00000000 & B11100111);
-  //TCCR1B = (TCCR1B | B00000101 & B11111101);  // PRESCALER 1024 // POSAR A 0
-  //TIMSK1 |= B00000010;                        // HABILITAR OCR1A
-
-  //OCR1A = 62500;
-
-//  EIMSK |= B00000010; // INT 1 INTERRUPT
-//  EICRA |= B00001100; // FLANC DE PUJADA INTERRUPT
-//
-//  sei();
+  digitalWrite(3, LOW); // check
 }
 
-//ISR(TIMER1_COMPA_vect){   ////////////////  // TIMER 1 INTERRUPT //  ////////////////// 
-//}
+ISR(INT4_COMPA_vect){                           // pins 2 3 18 19 20 21   CHECK
+  Clogging();
+}
 
 void loop() {
-  pwmWrite(9,255);
-  delay(2000);
-  wmWrite(9,127);
-  delay(2000);
+  digitalWrite(10, LOW); // DIRECTION
+  digitalWrite(11, HIGH); // DIRECTION
+  analogWrite(3, 250); // PWM 255
+  
+  //current_sensor = analogRead(pin);       // alternative
+  //if(current sensor < XXXX){
+    //analogWrite(3,100);
+    //digitalWrite(10, HIGH); // SWAP DIRECTIONS
+    //digitalWrite(11, LOW);
+    //delay(3000);
+  //}
+}
 
+int Clogging(){         // testing!!!!
+  analogWrite(3,100);
+  digitalWrite(10, HIGH); // SWAP DIRECTIONS
+  digitalWrite(11, LOW);
+  delay(3000);
 }
