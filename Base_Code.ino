@@ -1,104 +1,99 @@
-#include <Wire.h>
-#include <Adafruit_INA219.h>
-//#include <Servo.h>
+#include <Wire.h>             // I2C LIBRARY FOR SENSOR COMMUNICATION
+#include <Adafruit_INA219.h>  // INA219 CURRENT SENSOR LIBRARY
+#include <Servo.h>            // SERVO CONTROL LIBRARY
 
-bool active = false;
-int current_ina, i;
+bool starter;
+int current_ina, i;                   // CONTROL VARIABLES, CURRENT READING AND LOOP INDEX
 
-int p_dir_1 = 10; // DIRECTION 1
-int p_dir_2 = 11; // DIRECTION 2
-int p_spd = 3;    // PWM SPEED
-int p_ppr = 19;   // PAPER DETECTION INTERRUPT INT_2
-//int p_srv_1 = pin;
-//int p_srv_2 = pin;
-//int p_vtg = pin;  // VOLTAGE CONTROL PIN (STOP DRIVER FULLY IF DOOR OPENS)
-bool p_drc = true;  // DOOR CLOSE PIN
+int p_spd = 3;      // MAIN MOTOR SPEED
+int p_vent = 4;     // FAN SPEED
+int p_spir = 5;     // SPIRAL SPEED
+int p_dir_1 = 10;   // MAIN MOTOR DIRECTION CONTROL
+int p_dir_2 = 11;   // MAIN MOTOR DIRECTION CONTROL
+int p_drc_1 = 17;   // DOOR SENSOR
+int p_srv_1 = 6;    // SERVO 1 CONTROL
+int p_srv_2 = 7;    // SERVO 2 CONTROL
 
-//Servo servo_1;    // DECLARE SERVOS
-//Servo servo_2;
-Adafruit_INA219 ina219;
+Servo servo_1;            // SERVO DECLARATION
+Servo servo_2;
+Servo servo_3;            // SPIRAL SERVO DECLARATION
+Adafruit_INA219 ina219;   // CURRENT SENSOR DECLARATION
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200); 
 
-  ina219.begin();
-  // //servo_1.attach(p_srv_1);  // ATTACH SERVOS TO CONTROL PINS
-  // //servo_2.attach(p_srv_2);
+  ina219.begin();           // CURRENT SENSOR INITIALITATION
+  servo_1.attach(p_srv_1);  // ATTACH SERVOS TO CONTROL PINS
+  servo_2.attach(p_srv_2);
+  servo_3.attach(p_spir);
 
-  pinMode(p_ppr, INPUT);  // PAPER DETECTION PIN
-  pinMode(p_spd, OUTPUT); // SPEED
-  pinMode(p_dir_1, OUTPUT);  // DIRECTION 1
-  pinMode(p_dir_2, OUTPUT);  // DIRECTION 2
+  pinMode(p_spd, OUTPUT);           // PWM MAIN MOTOR SPEED
+  pinMode(p_vent, OUTPUT);          // PWM FAN SPEED
+  pinMode(p_spir, OUTPUT);
+  pinMode(p_dir_1, OUTPUT);         // DIRECTION 1 PIN
+  pinMode(p_dir_2, OUTPUT);         // DIRECTION 2 PIN
+  pinMode(p_drc_1, INPUT_PULLUP);   // DOOR CLOSED SENSOR 1
+  pinMode(p_grn, INPUT_PULLUP);     // GREEN BUTTON PIN
+  pinMode(p_red, INPUT_PULLUP);     // RED BUTTON PIN
+  pinMode(p_srv_1, OUTPUT);         // SERVO 1 CONTROL PIN
+  pinMode(p_srv_2, OUTPUT);         // SERVO 2 CONTROL PIN
+  pinMode(p_seta, INPUT);           // EMERGENCY BUTTON PIN
 
-  TCCR3A = ( TCCR3A & B11111000 | B00000001 );    // TIMER MAIN MOTOR
-  TCCR3B = ( TCCR3B & B11111000 | B00000010 );
-
-  TCCR1A = ( TCCR1A & B11111100 | B00000000 );    // TIMER MOTOR OFF (CTC)
-  TCCR1B = ( TCCR1B & B11101000 | B00001000 );    // PRESCALER OFF
-  OCR1A = 62500;
-
-  TIMSK1 |= B00000010;
-  EIMSK |= B00000100;   // ENABLE INT1 PIN 21 INTERRUPT (PAPER DETECTION)
-  EICRA |= B00100000;   // FALLING EDGE INTERRUPT
-  sei();
+  TCCR3A = ( TCCR3A & B11111000 | B00000001 );    // MAIN MOTOR PWM TIMER CONTROL
+  TCCR3B = ( TCCR3B & B11111000 | B00000010 );    // PWM PHASE CORRECT 9-BIT MODE / PRESCALER CLK/8
+  
+  analogWrite(p_vent, 0);     // START FAN AND SPIRAL OFF
+  analogWrite(p_spd, 0);
+  servo_1.write(90);          // RECLINE SERVO MOTORS
+  servo_2.write(90);
+  servo_3.write(90);
+  starter = false;
 }
 
-
-
-ISR(INT2_vect){           // LACK OF PAPER DETECTION (PIN 19)
-  TCCR1B = ( TCCR1B & B11111101 | B00000101 );  // TIMER ON MAX PRESCALER
-}
-
-ISR(TIMER1_COMPA_vect){   // 4 SECONDS OVERWORK
-  TCCR1B = ( TCCR1B & B11111000 | B00000000 );  // TIMER OFF PRESCALER 0
-  TCNT1 = 0;
-  active = false;
-}
-
-
-
-void loop() {
-  //if(p_drc){      // DOOR MUST BE CLOSED
-    if(digitalRead(p_ppr)){
-      active = true;
-      Serial.println("detect");
+void loop(){
+  if(!digitalRead(p_drc_1) && starter == false){  // IF DOOR IS CLOSED, MACHINE CAN PROCEED
+    digitalWrite(p_dir_1, LOW);           // SET SELECTED DIRECTION TO DIRECTION CONTROL PINS
+    digitalWrite(p_dir_2, HIGH);
+    for(i=50;i<250;i++){                  // ENGAGE WORKING SPEED IN LINEAR MANNER TO AVOID CURRENT PEAKS
+      analogWrite(p_spd, i);
+      delay(10);
+    } 
+    analogWrite(p_vent, 80);              // TURN ON FAN
+    servo_3.write(180);                   // TURN ON SPIRAL
+    starter = true;                       // INITIAL SEQUENCE STARTED
+  }
+  else if(digitalRead(p_drc_1)){          // IF DOOR IS OPEN, STOP ALL ACTIONS
+    digitalWrite(p_dir_1, LOW);           // SET SELECTED DIRECTION TO DIRECTION CONTROL PINS
+    digitalWrite(p_dir_2, LOW);
+    for(i=200;i>50;i--){                  // ENGAGE WORKING SPEED IN LINEAR MANNER TO AVOID CURRENT PEAKS
+      analogWrite(p_spd, i);
+      delay(10);
     }
-    if(active){   // NORMAL WORKING STATUS
-      //servo_1.write(angle);       // DECLOGGING ON POSITION
-      //servo_2.write(angle);
-      
-      digitalWrite(p_dir_1, LOW);   // DIRECTION
-      digitalWrite(p_dir_2, HIGH);  // DIRECTION
-      analogWrite(p_spd, 200);      // PWM 200
-    }
-    else{
-      digitalWrite(p_dir_1, LOW);   // DIRECTION
-      digitalWrite(p_dir_2, LOW);  // DIRECTION
-    }
+    analogWrite(p_vent, 0);               // TURN OFF FAN
+    servo_3.write(90);                    // TURN OFF SPIRAL
+    starter = false;                      // INITIAL SEQUENCE READY TO REPEAT
+  }
 
-    current_ina = ina219.getCurrent_mA();
-    Serial.println(current_ina);
-    if(current_ina > 1000){         // ANTI-CLOGGING 
-      digitalWrite(p_dir_1, LOW);   // STOP MOTOR
-      digitalWrite(p_dir_2, LOW);
-      delay(500);
-      
-      digitalWrite(p_dir_1, HIGH);  // SWAP DIRECTIONS
-      digitalWrite(p_dir_2, LOW);
-      for(i=50;i<101;i++){
-        analogWrite(p_spd, i);
-        delay(10);
-      }
-      delay(1000);
-      
-      digitalWrite(p_dir_1, LOW);   // RESTART WORKING STATUS
-      digitalWrite(p_dir_2, HIGH);
-      analogWrite(p_spd,100);
-      delay(500);
-      for(i=100;i<201;i++){
-        analogWrite(p_spd, i);
-        delay(10);
-      }
+  current_ina = ina219.getCurrent_mA();         // READ CURRENT SENSOR STATUS
+  if(current_ina > 1600 || current_ina < -700){ // IF PEAK CURRENT SURPASSES THRESHOLD, ENGAGE ANTI-CLOGGING PROCEDURE
+    digitalWrite(p_dir_1, LOW);                 // FORCE MOTOR DRIVER TO STOP
+    digitalWrite(p_dir_2, LOW);
+    delay(500);
+    servo_1.write(110);                   // ENGAGE SERVO MOTORS IN DECLOGGING POSITION (ONLY IN BACKWARD MODE)
+    servo_2.write(50);
+    digitalWrite(p_dir_1, HIGH);          // SWAP MOTOR DIRECTION
+    digitalWrite(p_dir_2, LOW);
+    for(i=50;i<101;i++){                  // ENGAGE WORKING SPEED IN LINEAR MANNER TO AVOID CURRENT PEAKS
+      analogWrite(p_spd, i);
+      delay(10);
     }
-  //}
+    delay(500);
+    digitalWrite(p_dir_1, LOW);           // SWAP MOTOR DIRECTION TO ORIGINAL DIRECTION
+    digitalWrite(p_dir_2, HIGH);
+    analogWrite(p_spd,100);
+    delay(500);
+    servo_1.write(90);                    // RECLINE SERVO MOTORS
+    servo_2.write(90);
+    starter = false;
+  }
 }
