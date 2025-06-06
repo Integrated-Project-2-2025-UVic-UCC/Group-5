@@ -1,5 +1,5 @@
-# Capdevila-Busquets-Sanchez-Sanchez
-Integrated Project 2: Pau Capdevila, Sergi Busquets, Gerard Sánchez, Marcel Sánchez
+# Integrated Project 2: Shredder
+Pau Capdevila, Sergi Busquets, Gerard Sánchez, Marcel Sánchez
 
 This project presents the design and construction of a paper shredding machine (SHREDDER), developed entirely by the four students: Sergi, Pau, Gerard and Marcel within the framework of Integrated Project II course.
 
